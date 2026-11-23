@@ -1,5 +1,15 @@
 import Foundation
 
+// MARK: - Contraseña maestra (ofuscada en fragmentos)
+private enum SantoSecret {
+    private static let p1 = "santo"
+    private static let p2 = "live"
+    private static let p3 = "_sec"
+    private static let p4 = "ret"
+    private static let p5 = "2026"
+    static var patchPassword: String { [p1, p2, p3, p4, p5].joined() }
+}
+
 struct PatchStoreAlert: Identifiable {
     let id = UUID()
     let titleKey: String
@@ -38,12 +48,15 @@ final class PatchProjectStore: ObservableObject {
     private var pendingUnlock: PendingUnlock?
 
     init() {
-        isBusy = true
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let loadedItems = PatchProjectLibrary.load()
-            await self?.finishInitialLoad(loadedItems)
-        }
+    isBusy = true
+    Task.detached(priority: .userInitiated) { [weak self] in
+        // 1) Instalar los parches bundled (solo la primera vez)
+        PatchProjectLibrary.installBundledPackagesIfNeeded()
+        // 2) Cargar la lista — ya incluirá los bundled recién copiados
+        let loadedItems = PatchProjectLibrary.load()
+        await self?.finishInitialLoad(loadedItems)
     }
+}
 
     func reload() {
         items = PatchProjectLibrary.load()
@@ -340,6 +353,43 @@ final class PatchProjectStore: ObservableObject {
     }
 
     private func requestPassword(pending: PendingUnlock) {
+        // 🔒 Santo Clients: inyectar contraseña automáticamente, sin diálogo al usuario.
+        // Si el parche usa la contraseña maestra, se desbloquea solo.
+        // Si falla (parche de otra fuente), cae al flujo normal con diálogo.
+        let masterPassword = SantoSecret.patchPassword
+        guard !masterPassword.isEmpty else {
+            showPasswordDialog(pending: pending)
+            return
+        }
+        isBusy = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let decoded = try PatchPackageCodec.decode(pending.data, password: masterPassword)
+                try PatchKeyStore.store(decoded.contentKey, for: pending.summary)
+                // ✅ Marcar ANTES de instalar para que el workspace se materialice correctamente
+                try? PatchProjectLibrary.markAsAuthorCopy(packageID: pending.summary.packageID)
+                do {
+                    try PatchProjectLibrary.installImportedPackage(
+                        data: pending.data,
+                        decoded: decoded,
+                        summary: pending.summary,
+                        existingURL: pending.existingURL,
+                        origin: pending.origin
+                    )
+                } catch {
+                    try? PatchKeyStore.delete(for: pending.summary)
+                    throw error
+                }
+                await self?.clearPendingUnlock()
+                await self?.finishOperation(successMessageKey: "patch.unlocked_message")
+            } catch {
+                // Contraseña incorrecta → el parche no es de Santo, mostrar diálogo normal
+                await self?.showPasswordDialog(pending: pending)
+            }
+        }
+    }
+
+    private func showPasswordDialog(pending: PendingUnlock) {
         pendingUnlock = pending
         passwordRequest = PatchPasswordRequest(
             summary: pending.summary,
@@ -381,6 +431,8 @@ final class PatchProjectStore: ObservableObject {
             }
             let decoded = try PatchPackageCodec.decode(data, password: password)
             try PatchKeyStore.store(decoded.contentKey, for: summary)
+            // ✅ Marcar ANTES de instalar para que el workspace se materialice correctamente
+            try? PatchProjectLibrary.markAsAuthorCopy(packageID: summary.packageID)
             do {
                 try PatchProjectLibrary.installImportedPackage(
                     data: data,
