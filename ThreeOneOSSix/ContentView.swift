@@ -18,22 +18,13 @@ struct ContentView: View {
 #if targetEnvironment(simulator)
         let arguments = ProcessInfo.processInfo.arguments
         let initialTab: Int
-        if arguments.contains("--simulate-new-tab")
-            || arguments.contains("--simulate-sources-tab")
-            || arguments.contains("--simulate-installed-tab")
-            || arguments.contains("--simulate-patch-tab")
-            || arguments.contains("--simulate-features-tab") {
-            initialTab = 0
-        } else if arguments.contains("--simulate-files-tab") {
-            initialTab = 4
-        } else if arguments.contains("--simulate-search-tab") {
-            initialTab = 5
-        } else if arguments.contains("--simulate-cleaner-tab") {
-            initialTab = 6
-        } else if arguments.contains("--simulate-wallpaper-tab") {
-            initialTab = 7
+        if arguments.contains("--simulate-installed-tab")
+            || arguments.contains("--simulate-patch-tab") {
+            initialTab = AppSection.installed.rawValue
+        } else if arguments.contains("--simulate-settings-tab") {
+            initialTab = AppSection.settings.rawValue
         } else {
-            initialTab = 0
+            initialTab = AppSection.installed.rawValue
         }
         _tabNavigation = State(initialValue: AppTabNavigationState(selectedTab: initialTab))
         _showSettings = State(
@@ -203,6 +194,8 @@ struct ContentView: View {
                 onOpenSettings: openSettings,
                 onOpenLogs: openLogs
             )
+        case .settings:
+            SettingsView()
         }
     }
 
@@ -222,19 +215,20 @@ struct ContentView: View {
 
     private var featureVisibility: FeatureVisibility {
         FeatureVisibility(
-            selectedSections: [.home, .files, .search, .cleaner, .wallpapers],
-            wallpapersSupported: WallpaperFeatureSupportPolicy.isSupported(
-                major: AppInfo.versionTuple.major
-            ),
-            developerModeEnabled: true
+            selectedSections: [.installed, .settings],
+            wallpapersSupported: false,
+            developerModeEnabled: false
         )
     }
+
+    // Note: `showSettings` sheet is kept for deep-link / banner usage,
+    // but the primary Settings entry point is now the tab bar.
 
     private var selectedVisibleSection: AppSection {
         let selected = AppSection(rawValue: tabNavigation.selectedTab)
         return selected.flatMap {
             featureVisibility.isVisible($0) ? $0 : nil
-        } ?? .home
+        } ?? .installed
     }
 
     private func openSettings() {
@@ -264,4 +258,3 @@ private struct CompactTabLabel: View {
         Text(title)
     }
 }
-
