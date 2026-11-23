@@ -10,6 +10,7 @@ enum AppSection: Int, CaseIterable, Identifiable {
     case cleaner
     case wallpapers
     case backup
+    case settings
 
     var id: Int { rawValue }
 }
@@ -20,12 +21,13 @@ extension AppSection {
         case .home: return "tab.features"
         case .new: return "tab.new"
         case .sources: return "tab.sources"
-        case .installed: return "tab.installed"
+        case .installed: return "tab.patches"
         case .files: return "tab.files"
         case .search: return "tab.search"
         case .cleaner: return "tab.cleaner"
         case .wallpapers: return "tab.wallpapers"
         case .backup: return "tab.backup"
+        case .settings: return "tab.settings"
         }
     }
 
@@ -40,6 +42,7 @@ extension AppSection {
         case .cleaner: return "sparkles"
         case .wallpapers: return "photo.on.rectangle.angled"
         case .backup: return "externaldrive.badge.timemachine"
+        case .settings: return "gearshape.fill"
         }
     }
 }
@@ -47,9 +50,9 @@ extension AppSection {
 enum TabBarSelection {
     static let storageKey = "tabbar.selection"
     static let maxSections = 5
-    /// home(0), files(4), search(5), cleaner(6), backup(8)
-    static let defaultRaw = "0,4,5,6,8"
-    static let legacyDefaultRaw = "0,1,2,3,4"
+    /// installed(3), settings(9)
+    static let defaultRaw = "3,9"
+    static let legacyDefaultRaw = "3,9"
 
     static func sections(from raw: String) -> [AppSection] {
         let selected = Set(raw.split(separator: ",").compactMap { Int($0) })
@@ -107,10 +110,7 @@ struct FeatureVisibility: Equatable {
     }
 
     var visibleSections: [AppSection] {
-        // Fixed product shape: 功能 / 文件 / 搜索 / 清理 / 备份. Wallpapers,
-        // repository and patch entry points live inside the feature hub
-        // instead of the tab bar.
-        [.home, .files, .search, .cleaner, .backup]
+        [.installed, .settings]
     }
 
     func isVisible(_ section: AppSection) -> Bool {
@@ -151,7 +151,7 @@ struct AppTabNavigationState: Equatable {
     mutating func reconcileSelection(with visibility: FeatureVisibility) {
         guard let selectedSection = AppSection(rawValue: selectedTab),
               visibility.isVisible(selectedSection) else {
-            selectedTab = AppSection.home.rawValue
+            selectedTab = AppSection.installed.rawValue
             return
         }
     }
