@@ -50,9 +50,7 @@ final class PatchProjectStore: ObservableObject {
     init() {
     isBusy = true
     Task.detached(priority: .userInitiated) { [weak self] in
-        // 1) Instalar los parches bundled (solo la primera vez)
-        PatchProjectLibrary.installBundledPackagesIfNeeded()
-        // 2) Cargar la lista — ya incluirá los bundled recién copiados
+        // Load the library on first launch
         let loadedItems = PatchProjectLibrary.load()
         await self?.finishInitialLoad(loadedItems)
     }
