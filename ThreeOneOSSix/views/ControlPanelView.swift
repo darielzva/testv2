@@ -19,19 +19,16 @@ struct PatchToggle: Identifiable {
     var fullFilename: String { "\(patchFilename).3105" }
     var normalizedName: String { Self.normalize(patchFilename) }
     
-    static func normalize(_ name: String) -> String {
-        var result = name
-        if result.lowercased().hasSuffix(".3105") {
-            result = String(result.dropLast(5))
-        }
-        result = result.trimmingCharacters(in: CharacterSet(charactersIn: " -_"))
-        result = result.replacingOccurrences(
-            of: "\\s+",
-            with: " ",
-            options: .regularExpression
-        )
-        return result.uppercased()
+// ✅ ARREGLADO — quita ambas extensiones
+static func normalize(_ name: String) -> String {
+    var result = name
+    let lower = result.lowercased()
+    if lower.hasSuffix(".3105") || lower.hasSuffix(".3106") {
+        result = String(result.dropLast(5))
     }
+    result = result.trimmingCharacters(in: CharacterSet(charactersIn: " -_"))
+    result = result.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    return result.uppercased()
 }
 
 enum PatchCategory: String, CaseIterable, Identifiable {
