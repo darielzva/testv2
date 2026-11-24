@@ -209,6 +209,9 @@ struct ControlPanelView: View {
             withAnimation(.easeOut(duration: 0.5)) {
                 appeared = true
             }
+            // ✅ Recargar desde disco antes de sincronizar estados —
+            // garantiza que los .3106 ya escritos estén en patchStore.items
+            patchStore.reload()
             syncToggleStates()
             Task {
                 await loadDynamicPatchesIfNeeded()
@@ -511,6 +514,10 @@ struct ControlPanelView: View {
             let patches = try await patchesStore.fetchPatches()
             log("panel: \(patches.count) parches dinámicos cargados")
             await patchesStore.downloadAllPatches(patches)
+            // ✅ Recargar la librería después de que todos los .3106 están en disco
+            // Sin esto, findLibraryItem busca en el snapshot viejo y devuelve nil
+            await MainActor.run { patchStore.reload() }
+            log("panel: librería recargada — \(patchStore.items.count) items disponibles")
         } catch {
             log("panel: error cargando parches dinámicos: \(error)")
         }
