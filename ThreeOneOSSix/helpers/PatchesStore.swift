@@ -145,12 +145,18 @@ final class PatchesStore: ObservableObject {
         let data = try Data(contentsOf: sourceURL)
         let summary = try PatchPackageCodec.inspect(data)
 
-        // Si ya está instalado con la misma versión, no reimportar
+        // Si ya está instalado Y el nombre en disco ya coincide con patchFilename, no reimportar
         let existingItems = PatchProjectLibrary.load()
         if let existing = existingItems.first(where: { $0.id == summary.packageID }),
            existing.project != nil {
-            log("patches: \(patch.patchFilename) ya instalado correctamente")
-            return
+            let diskName = existing.packageURL.deletingPathExtension().lastPathComponent
+            let expectedName = patch.patchFilename
+            if diskName == expectedName {
+                log("patches: \(patch.patchFilename) ya instalado correctamente")
+                return
+            }
+            // Nombre incorrecto en disco — forzar reinstalación
+            log("patches: \(patch.patchFilename) nombre en disco incorrecto (\(diskName)), reinstalando")
         }
 
         // Marcar como authorCopy ANTES de instalar → el workspace se crea
