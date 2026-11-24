@@ -204,21 +204,24 @@ enum PatchProjectLibrary {
         summary: PatchPackageSummary,
         existingURL: URL?,
         origin: PatchPackageOrigin? = nil,
+        skipOverlapCheck: Bool = false,
         fileManager: FileManager = .default
     ) throws {
         let authorCopy = isAuthorCopy(
             packageID: summary.packageID,
             fileManager: fileManager
         )
-        if let occupiedPath = overlappingTargetPath(
-            in: decoded.project,
-            excludingPackageID: summary.packageID,
-            fileManager: fileManager
-        ) {
-            if decoded.project.isPrivate, !authorCopy {
-                throw PatchPackageError.privateOperationFailed
+        if !skipOverlapCheck {
+            if let occupiedPath = overlappingTargetPath(
+                in: decoded.project,
+                excludingPackageID: summary.packageID,
+                fileManager: fileManager
+            ) {
+                if decoded.project.isPrivate, !authorCopy {
+                    throw PatchPackageError.privateOperationFailed
+                }
+                throw PatchPackageError.targetOccupied(occupiedPath)
             }
-            throw PatchPackageError.targetOccupied(occupiedPath)
         }
         let previousData = try existingURL.map { try readPackage(at: $0) }
         let originURL = try originFileURL(
