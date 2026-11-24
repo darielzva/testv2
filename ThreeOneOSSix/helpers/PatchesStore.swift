@@ -150,10 +150,11 @@ final class PatchesStore: ObservableObject {
         var staleURL: URL? = nil
         if let existing = existingItems.first(where: { $0.id == summary.packageID }),
            existing.project != nil {
-            let diskName = existing.packageURL.deletingPathExtension().lastPathComponent
-            let expectedName = patch.patchFilename
-            if diskName == expectedName {
-                log("patches: \(patch.patchFilename) ya instalado correctamente")
+            let diskName = existing.packageURL.lastPathComponent  // incluye extensión para normalize
+            let normalizedDisk = PatchToggle.normalize(diskName)
+            let normalizedExpected = PatchToggle.normalize(patch.patchFilename)
+            if normalizedDisk == normalizedExpected {
+                log("patches: \(patch.patchFilename) ya instalado correctamente (\(diskName))")
                 return
             }
             // Nombre incorrecto en disco — guardar URL vieja para borrarla después
