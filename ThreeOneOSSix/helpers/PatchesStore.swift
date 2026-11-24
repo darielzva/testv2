@@ -160,10 +160,19 @@ final class PatchesStore: ObservableObject {
         let decoded = try PatchPackageCodec.decode(data, password: masterPassword)
         try PatchKeyStore.store(decoded.contentKey, for: summary)
 
+        // Forzar el nombre del archivo en disco a patchFilename (slug de Supabase)
+        // para que findLibraryItem pueda matchearlo por nombre normalizado
+        var renamedProject = decoded.project
+        renamedProject.name = patch.patchFilename
+        let renamedDecoded = DecodedPatchPackage(
+            project: renamedProject,
+            contentKey: decoded.contentKey
+        )
+
         let existingURL = existingItems.first(where: { $0.id == summary.packageID })?.packageURL
         try PatchProjectLibrary.installImportedPackage(
             data: data,
-            decoded: decoded,
+            decoded: renamedDecoded,
             summary: summary,
             existingURL: existingURL,
             origin: nil
