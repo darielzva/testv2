@@ -115,8 +115,8 @@ final class PatchesStore: ObservableObject {
         // Si ya existe y el hash coincide, no descargar
         if FileManager.default.fileExists(atPath: localURL.path) {
             log("patches: \(patch.patchFilename) ya existe localmente")
-            // 🎯 Asegurar que también está en PatchProjects
-            try? copyToPatchProjects(from: localURL, patch: patch)
+            // 🎯 Asegurar que también está en PatchProjects — propagar error para detectar problemas
+            try copyToPatchProjects(from: localURL, patch: patch)
             onProgress?(1.0)
             return
         }
@@ -178,18 +178,55 @@ final class PatchesStore: ObservableObject {
             contentKey: decoded.contentKey
         )
 
-        // Pasar existingURL: nil para que save() genere el nombre desde renamedProject.name
-        // Si había un archivo con nombre incorrecto, borrarlo después de instalar el nuevo
-        try PatchProjectLibrary.installImportedPackage(
-            data: data,
-            decoded: renamedDecoded,
-            summary: summary,
-            existingURL: nil,
-            origin: nil
-        )
+        // Si hay un archivo stale (mismo UUID, nombre incorrecto), renombrarlo primero
+        // para que installImportedPackage lo sobreescriba en el lugar correcto.
+        // Pasar existingURL: nil → save() genera nombre desde renamedProject.name (patchFilename).
+        // Pero si pasamos el staleURL, overlappingTargetPath lo excluye por UUID → no lanza targetOccupied.
+        // Solución: borrar el stale ANTES de instalar, así no hay conflicto de targets.
         if let stale = staleURL {
             try? FileManager.default.removeItem(at: stale)
-            log("patches: 🗑 archivo obsoleto eliminado: \(stale.lastPathComponent)")
+            log("patches: 🗑 archivo obsoleto eliminado antes de reinstalar: \(stale.lastPathComponent)")
+        }
+
+        do {
+            try PatchProjectLibrary.installImportedPackage(
+                data: data,
+                decoded: renamedDecoded,
+                summary: summary,
+                existingURL: nil,
+                origin: nil
+            )
+        } catch PatchPackageError.targetOccupied(let path) {
+            // Otro patch ya ocupa esa ruta — buscar el conflicto, borrarlo y reintentar
+            log("patches: ⚠️ targetOccupied '\(path)' al instalar \(patch.patchFilename) — buscando conflicto")
+            let allItems = PatchProjectLibrary.load()
+            var removed = false
+            for item in allItems where item.id != summary.packageID {
+                guard let project = item.project else { continue }
+                let occupies = project.rules.contains { r in
+                    r.bundleID + "/" + r.relativePath == path
+                } || project.directories.contains { d in
+                    d.bundleID + "/" + d.relativePath == path
+                }
+                if occupies {
+                    try? FileManager.default.removeItem(at: item.packageURL)
+                    log("patches: 🗑 conflicto eliminado: \(item.packageURL.lastPathComponent)")
+                    removed = true
+                    break
+                }
+            }
+            if removed {
+                // Reintentar instalación tras eliminar el conflicto
+                try PatchProjectLibrary.installImportedPackage(
+                    data: data,
+                    decoded: renamedDecoded,
+                    summary: summary,
+                    existingURL: nil,
+                    origin: nil
+                )
+            } else {
+                log("patches: ❌ no se encontró conflicto para '\(path)' — saltando \(patch.patchFilename)")
+            }
         }
         log("patches: ✅ \(patch.patchFilename) instalado con workspace")
     }
