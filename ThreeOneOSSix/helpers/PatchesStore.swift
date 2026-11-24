@@ -147,6 +147,7 @@ final class PatchesStore: ObservableObject {
 
         // Si ya está instalado Y el nombre en disco ya coincide con patchFilename, no reimportar
         let existingItems = PatchProjectLibrary.load()
+        var staleURL: URL? = nil
         if let existing = existingItems.first(where: { $0.id == summary.packageID }),
            existing.project != nil {
             let diskName = existing.packageURL.deletingPathExtension().lastPathComponent
@@ -155,8 +156,9 @@ final class PatchesStore: ObservableObject {
                 log("patches: \(patch.patchFilename) ya instalado correctamente")
                 return
             }
-            // Nombre incorrecto en disco — forzar reinstalación
-            log("patches: \(patch.patchFilename) nombre en disco incorrecto (\(diskName)), reinstalando")
+            // Nombre incorrecto en disco — guardar URL vieja para borrarla después
+            staleURL = existing.packageURL
+            log("patches: \(patch.patchFilename) nombre incorrecto en disco (\(diskName)), reinstalando")
         }
 
         // Marcar como authorCopy ANTES de instalar → el workspace se crea
@@ -175,14 +177,19 @@ final class PatchesStore: ObservableObject {
             contentKey: decoded.contentKey
         )
 
-        let existingURL = existingItems.first(where: { $0.id == summary.packageID })?.packageURL
+        // Pasar existingURL: nil para que save() genere el nombre desde renamedProject.name
+        // Si había un archivo con nombre incorrecto, borrarlo después de instalar el nuevo
         try PatchProjectLibrary.installImportedPackage(
             data: data,
             decoded: renamedDecoded,
             summary: summary,
-            existingURL: existingURL,
+            existingURL: nil,
             origin: nil
         )
+        if let stale = staleURL {
+            try? FileManager.default.removeItem(at: stale)
+            log("patches: 🗑 archivo obsoleto eliminado: \(stale.lastPathComponent)")
+        }
         log("patches: ✅ \(patch.patchFilename) instalado con workspace")
     }
     
