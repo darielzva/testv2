@@ -25,7 +25,11 @@ struct PatchToggle: Identifiable {
         if lower.hasSuffix(".3106") || lower.hasSuffix(".3105") {
             result = String(result.dropLast(5))
         }
-        result = result.trimmingCharacters(in: CharacterSet(charactersIn: " -_"))
+        // Reemplazar guiones y guiones bajos (internos y bordes) por espacio
+        // para que PECHO-CON-ANTENA == PECHO_CON_ANTENA después de normalize
+        result = result.replacingOccurrences(of: "-", with: " ")
+        result = result.replacingOccurrences(of: "_", with: " ")
+        result = result.trimmingCharacters(in: .whitespaces)
         result = result.replacingOccurrences(
             of: "\\s+",
             with: " ",
