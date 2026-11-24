@@ -145,21 +145,22 @@ final class PatchesStore: ObservableObject {
         let data = try Data(contentsOf: sourceURL)
         let summary = try PatchPackageCodec.inspect(data)
 
-        // Si ya está instalado Y el nombre en disco ya coincide con patchFilename, no reimportar
+        // Verificar si ya está instalado con nombre correcto Y con proyecto funcional
         let existingItems = PatchProjectLibrary.load()
         var staleURL: URL? = nil
-        if let existing = existingItems.first(where: { $0.id == summary.packageID }),
-           existing.project != nil {
-            let diskName = existing.packageURL.lastPathComponent  // incluye extensión para normalize
-            let normalizedDisk = PatchToggle.normalize(diskName)
-            let normalizedExpected = PatchToggle.normalize(patch.patchFilename)
-            if normalizedDisk == normalizedExpected {
+        if let existing = existingItems.first(where: { $0.id == summary.packageID }) {
+            let diskName = existing.packageURL.lastPathComponent
+            let normalizedDisk   = PatchToggle.normalize(diskName)
+            let normalizedTarget = PatchToggle.normalize(patch.patchFilename + ".3106")
+            let nameOK    = normalizedDisk == normalizedTarget
+            let contentOK = existing.project != nil        // proyecto decodificado correctamente
+            if nameOK && contentOK {
                 log("patches: \(patch.patchFilename) ya instalado correctamente (\(diskName))")
                 return
             }
-            // Nombre incorrecto en disco — guardar URL vieja para borrarla después
+            // Nombre incorrecto o proyecto inválido — marcar para reemplazar
             staleURL = existing.packageURL
-            log("patches: \(patch.patchFilename) nombre incorrecto en disco (\(diskName)), reinstalando")
+            log("patches: \(patch.patchFilename) reinstalando — nombre ok=\(nameOK) contenido ok=\(contentOK) (\(diskName))")
         }
 
         // Marcar como authorCopy ANTES de instalar → el workspace se crea
@@ -188,46 +189,17 @@ final class PatchesStore: ObservableObject {
             log("patches: 🗑 archivo obsoleto eliminado antes de reinstalar: \(stale.lastPathComponent)")
         }
 
-        do {
-            try PatchProjectLibrary.installImportedPackage(
-                data: data,
-                decoded: renamedDecoded,
-                summary: summary,
-                existingURL: nil,
-                origin: nil
-            )
-        } catch PatchPackageError.targetOccupied(let path) {
-            // Otro patch ya ocupa esa ruta — buscar el conflicto, borrarlo y reintentar
-            log("patches: ⚠️ targetOccupied '\(path)' al instalar \(patch.patchFilename) — buscando conflicto")
-            let allItems = PatchProjectLibrary.load()
-            var removed = false
-            for item in allItems where item.id != summary.packageID {
-                guard let project = item.project else { continue }
-                let occupies = project.rules.contains { r in
-                    r.bundleID + "/" + r.relativePath == path
-                } || project.directories.contains { d in
-                    d.bundleID + "/" + d.relativePath == path
-                }
-                if occupies {
-                    try? FileManager.default.removeItem(at: item.packageURL)
-                    log("patches: 🗑 conflicto eliminado: \(item.packageURL.lastPathComponent)")
-                    removed = true
-                    break
-                }
-            }
-            if removed {
-                // Reintentar instalación tras eliminar el conflicto
-                try PatchProjectLibrary.installImportedPackage(
-                    data: data,
-                    decoded: renamedDecoded,
-                    summary: summary,
-                    existingURL: nil,
-                    origin: nil
-                )
-            } else {
-                log("patches: ❌ no se encontró conflicto para '\(path)' — saltando \(patch.patchFilename)")
-            }
-        }
+        // skipOverlapCheck: true — los remotePatches comparten ruta por diseño
+        // (AIM PECHO, AIM DRAG, AIM CUELLO apuntan todos al mismo archivo en Free Fire)
+        // Son mutuamente excluyentes al activar, no al instalar. Todos conviven en disco.
+        try PatchProjectLibrary.installImportedPackage(
+            data: data,
+            decoded: renamedDecoded,
+            summary: summary,
+            existingURL: nil,
+            origin: nil,
+            skipOverlapCheck: true
+        )
         log("patches: ✅ \(patch.patchFilename) instalado con workspace")
     }
     
