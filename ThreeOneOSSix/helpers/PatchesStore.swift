@@ -161,15 +161,15 @@ final class PatchesStore: ObservableObject {
         try PatchKeyStore.store(decoded.contentKey, for: summary)
 
         let existingURL = existingItems.first(where: { $0.id == summary.packageID })?.packageURL
-// ✅ DESPUÉS — fuerza el nombre a usar patchFilename de Supabase
         try PatchProjectLibrary.installImportedPackage(
             data: data,
             decoded: decoded,
             summary: summary,
-            existingURL: nil,
-            origin: origin,
-            preferredFilename: patch.patchFilename  // parámetro nuevo
+            existingURL: existingURL,
+            origin: nil
         )
+        log("patches: ✅ \(patch.patchFilename) instalado con workspace")
+    }
     
     // MARK: - Download All
     
