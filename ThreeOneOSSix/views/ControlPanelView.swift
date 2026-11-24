@@ -21,7 +21,8 @@ struct PatchToggle: Identifiable {
     
     static func normalize(_ name: String) -> String {
         var result = name
-        if result.lowercased().hasSuffix(".3105") {
+        let lower = result.lowercased()
+        if lower.hasSuffix(".3106") || lower.hasSuffix(".3105") {
             result = String(result.dropLast(5))
         }
         result = result.trimmingCharacters(in: CharacterSet(charactersIn: " -_"))
