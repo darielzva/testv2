@@ -1,9 +1,9 @@
 import SwiftUI
-import AVKit
 import AVFoundation
 
-/// Full-screen looping video background layer.
-/// Add the video file to the app bundle and reference it by name + extension.
+/// Full-screen looping video background — aspect fill, no letterbox.
+/// Uses AVPlayerLayer directly so videoGravity = .resizeAspectFill covers
+/// every screen size without black bars.
 struct VideoBackgroundView: View {
     let videoName: String
     let videoExtension: String
@@ -11,19 +11,14 @@ struct VideoBackgroundView: View {
     @StateObject private var player = LoopingPlayer()
 
     var body: some View {
-        GeometryReader { geo in
-            VideoPlayer(player: player.avPlayer)
-                .disabled(true)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipped()
-                .allowsHitTesting(false)
-                .onAppear {
-                    player.configure(videoName: videoName, videoExtension: videoExtension)
-                    player.play()
-                }
-                .onDisappear { player.pause() }
-        }
-        .ignoresSafeArea()
+        VideoLayerView(player: player.avPlayer)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .onAppear {
+                player.configure(videoName: videoName, videoExtension: videoExtension)
+                player.play()
+            }
+            .onDisappear { player.pause() }
     }
 
     init(videoName: String, videoExtension: String = "mp4") {
@@ -31,6 +26,45 @@ struct VideoBackgroundView: View {
         self.videoExtension = videoExtension
     }
 }
+
+// MARK: - UIViewRepresentable — AVPlayerLayer con resizeAspectFill
+
+private struct VideoLayerView: UIViewRepresentable {
+    let player: AVQueuePlayer
+
+    func makeUIView(context: Context) -> PlayerUIView {
+        let view = PlayerUIView()
+        view.setPlayer(player)
+        return view
+    }
+
+    func updateUIView(_ uiView: PlayerUIView, context: Context) {}
+}
+
+private final class PlayerUIView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+
+    private var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        playerLayer.videoGravity = .resizeAspectFill
+        backgroundColor = .black
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func setPlayer(_ player: AVQueuePlayer) {
+        playerLayer.player = player
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        playerLayer.frame = bounds
+    }
+}
+
+// MARK: - LoopingPlayer
 
 @MainActor
 private final class LoopingPlayer: ObservableObject {
